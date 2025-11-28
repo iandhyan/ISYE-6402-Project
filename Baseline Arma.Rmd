@@ -1,0 +1,154 @@
+
+library(readr)
+library(lubridate)
+library(ggplot2)
+library(forecast)
+library(vars)
+library(gridExtra)
+library(Metrics)
+library(dplyr)
+
+# 1. Load Dataset
+
+veh <- read_csv("/Users/niraj/Downloads/VehicleData-1 (1).csv")
+veh$DATE <- mdy(veh$DATE)
+veh <- veh[order(veh$DATE), ]
+
+
+# 2. Build Time Series Objects
+
+sales_ts  <- ts(veh$`Total Sales`, start = c(2000,1), frequency = 12)
+orders_ts <- ts(veh$`New Orders`, start = c(2000,1), frequency = 12)
+
+ts_data <- cbind(sales_ts, orders_ts)
+
+
+# 3. Diagnostics Plots
+
+p1 <- autoplot(sales_ts) + ggtitle("Total Sales - Time Series")
+p2 <- autoplot(orders_ts) + ggtitle("New Orders - Time Series")
+grid.arrange(p1, p2, ncol=1)
+
+p3 <- autoplot(stl(sales_ts, s.window="periodic")) + ggtitle("STL - Total Sales")
+p4 <- autoplot(stl(orders_ts, s.window="periodic")) + ggtitle("STL - New Orders")
+grid.arrange(p3, p4, ncol=1)
+
+diff_data <- diff(ts_data)
+
+p5 <- autoplot(diff(sales_ts)) + ggtitle("Diff - Total Sales")
+p6 <- autoplot(diff(orders_ts)) + ggtitle("Diff - New Orders")
+grid.arrange(p5, p6, ncol=1)
+
+# 4. Select Optimal VAR Order
+
+lag_selection <- VARselect(diff_data, lag.max=6, type="const")
+print(lag_selection)
+p_opt <- lag_selection$selection["AIC(n)"]
+
+
+# 5. Fit VAR Model on Differenced Data
+
+var_model <- VAR(diff_data, p=p_opt, type="const")
+summary(var_model)
+
+
+# 6. Residual Diagnostics
+
+serial.test(var_model, lags.pt=12, type="PT.asymptotic")
+
+# 7. Forecast 12 Steps Ahead (DIFFERENCED FORECASTS)
+
+fc <- predict(var_model, n.ahead=12)
+fc_sales  <- fc$fcst$sales_ts
+fc_orders <- fc$fcst$orders_ts
+
+
+# FIX: Convert VAR differenced forecasts back to original levels
+
+
+# Last observed LEVEL values (must be numeric vectors, not ts objects)
+last_sales  <- as.numeric(tail(sales_ts, 1))
+last_orders <- as.numeric(tail(orders_ts, 1))
+
+# Convert ΔForecast → LEVEL forecast using cumulative sums
+sales_level_fc  <- last_sales  + cumsum(fc_sales[, "fcst"])
+orders_level_fc <- last_orders + cumsum(fc_orders[, "fcst"])
+
+# Update data frames with corrected forecasts
+sales_fc_df$value  <- sales_level_fc
+orders_fc_df$value <- orders_level_fc
+
+
+# 9. Build Forecast Data Frames
+
+fc_dates <- seq(
+  from = max(veh$DATE) %m+% months(1),
+  by   = "month",
+  length.out = 12
+)
+
+sales_fc_df <- data.frame(date = fc_dates, value = sales_level_fc)
+orders_fc_df <- data.frame(date = fc_dates, value = orders_level_fc)
+
+sales_df <- data.frame(date = veh$DATE, value = sales_ts)
+orders_df <- data.frame(date = veh$DATE, value = orders_ts)
+
+
+# 10. Forecast Plots (Actual vs Forecast)
+
+plot_sales <- ggplot() +
+  geom_line(data = sales_df, aes(date, value), color="blue") +
+  geom_line(data = sales_fc_df, aes(date, value), color="red") +
+  labs(title="Actual vs Forecast – Total Sales",
+       x="Date", y="Total Sales",
+       caption="Blue = Actual, Red = Forecast") +
+  theme_minimal()
+
+plot_orders <- ggplot() +
+  geom_line(data = orders_df, aes(date, value), color="blue") +
+  geom_line(data = orders_fc_df, aes(date, value), color="red") +
+  labs(title="Actual vs Forecast – New Orders",
+       x="Date", y="New Orders",
+       caption="Blue = Actual, Red = Forecast") +
+  theme_minimal()
+
+grid.arrange(plot_sales, plot_orders, ncol=1)
+
+
+# 11. In-Sample Fitted Values + Metrics
+
+fitted_vals <- fitted(var_model)
+
+# Align fitted values correctly
+n_total   <- nrow(veh)
+n_fitted  <- nrow(fitted_vals)
+aligned_dates <- veh$DATE[(n_total - n_fitted + 1):n_total]
+
+fitted_df <- data.frame(
+  date = aligned_dates,
+  sales_fitted  = fitted_vals[, "sales_ts"],
+  orders_fitted = fitted_vals[, "orders_ts"]
+)
+
+actual_df <- data.frame(
+  date = veh$DATE,
+  actual_sales  = as.numeric(sales_ts),
+  actual_orders = as.numeric(orders_ts)
+)
+
+compare_df <- merge(actual_df, fitted_df, by="date", all.x=TRUE)
+eval_df <- na.omit(compare_df)
+
+# Total Sales Metrics
+cat("\n### In-Sample Accuracy – Total Sales ###\n")
+cat("RMSE: ", rmse(eval_df$actual_sales, eval_df$sales_fitted), "\n")
+cat("MAE:  ", mae(eval_df$actual_sales, eval_df$sales_fitted), "\n")
+cat("MAPE: ", mape(eval_df$actual_sales, eval_df$sales_fitted), "\n")
+cat("sMAPE:", smape(eval_df$actual_sales, eval_df$sales_fitted), "\n\n")
+
+# New Orders Metrics
+cat("### In-Sample Accuracy – New Orders ###\n")
+cat("RMSE: ", rmse(eval_df$actual_orders, eval_df$orders_fitted), "\n")
+cat("MAE:  ", mae(eval_df$actual_orders, eval_df$orders_fitted), "\n")
+cat("MAPE: ", mape(eval_df$actual_orders, eval_df$orders_fitted), "\n")
+cat("sMAPE:", smape(eval_df$actual_orders, eval_df$orders_fitted), "\n")
