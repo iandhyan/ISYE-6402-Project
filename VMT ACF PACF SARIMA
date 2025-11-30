@@ -1,0 +1,63 @@
+# First ORDER DIFFERENCE FOR VMT
+
+
+library(readr)
+library(lubridate)
+library(forecast)
+library(ggplot2)
+library(gridExtra)
+
+# ---- Load VMT Data ----
+vmt <- read_csv("/Users/niraj/downloads/VMT.csv")
+
+# Convert the date column
+vmt$observation_date <- ymd(vmt$observation_date)
+
+# Create the monthly time series
+vmt_ts <- ts(
+  vmt$VMT,
+  start = c(year(min(vmt$observation_date)), month(min(vmt$observation_date))),
+  frequency = 12
+)
+
+autoplot(stl(vmt_ts, s.window = "periodic"))
+
+
+
+vmt_diff2 <- diff(diff(vmt_ts, lag = 12), 1)
+
+# 2. Plot the differenced series
+
+autoplot(vmt_diff2) +
+  ggtitle("Differenced VMT") +
+  xlab("Date") + ylab("Differenced VMT")
+
+
+# 3. ACF & PACF
+
+acf_vmt_diff2  <- ggAcf(vmt_diff2)  + ggtitle("ACF - Δ²VMT")
+pacf_vmt_diff2 <- ggPacf(vmt_diff2) + ggtitle("PACF - Δ²VMT")
+
+grid.arrange(acf_vmt_diff2, pacf_vmt_diff2, ncol = 2)
+
+
+# 4. Fit SARIMA 
+
+sarima_vmt_d2 <- auto.arima(
+  vmt_ts,
+  d = 1,                # second-order nonseasonal difference
+  seasonal = TRUE,
+  stepwise = FALSE,
+  approximation = FALSE
+)
+
+summary(sarima_vmt_d2)
+
+
+# 5. Forecast
+
+fc_vmt_d2 <- forecast(sarima_vmt_d2, h = 12)
+
+autoplot(fc_vmt_d2) +
+  ggtitle("VMT SARIMA Forecast") +
+  xlab("Date") + ylab("VMT (forecasted)")
