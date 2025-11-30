@@ -1,0 +1,47 @@
+# UNIVARIATE ARMA MODEL - NEW ORDERS
+
+
+# Create orders time series
+orders_ts <- ts(
+  veh$`New Orders`,
+  start = c(2000, 1),
+  frequency = 12
+)
+
+# 1. Stationarity Check via Differencing
+
+orders_diff <- diff(orders_ts)
+
+autoplot(orders_diff) +
+  ggtitle("Differenced New Orders (Stationary Input for ARMA)") +
+  theme_minimal()
+
+
+# 2. ACF/PACF
+
+acf_orders  <- ggAcf(orders_diff)  + ggtitle("ACF - Differenced New Orders")
+pacf_orders <- ggPacf(orders_diff) + ggtitle("PACF - Differenced New Orders")
+
+grid.arrange(acf_orders, pacf_orders, ncol=2)
+
+
+# 3. Fit ARMA Model
+
+arma_orders <- auto.arima(
+  orders_ts,
+  d = 1,              # ARMA by differencing once
+  seasonal = FALSE,  # do not include seasonal terms
+  stepwise = FALSE,
+  approximation = FALSE
+)
+
+summary(arma_orders)
+
+
+# 4. Forecast Next 12 Months
+
+fc_orders <- forecast(arma_orders, h = 12)
+
+autoplot(fc_orders) +
+  ggtitle("ARMA Forecast - New Orders") +
+  xlab("Date") + ylab("New Orders")
