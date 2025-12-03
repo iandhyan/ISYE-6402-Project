@@ -41,8 +41,8 @@ grid.arrange(acf_sales, pacf_sales, ncol=2)
 
 arma_sales <- auto.arima(
   sales_ts,
-  d = 1,              # ensures ARMA model with differenced input
-  seasonal = FALSE,  # ARMA, NOT ARIMA/SARIMA
+  d = 1,              
+  seasonal = FALSE,  
   stepwise = FALSE,
   approximation = FALSE
 )
