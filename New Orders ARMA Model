@@ -29,8 +29,8 @@ grid.arrange(acf_orders, pacf_orders, ncol=2)
 
 arma_orders <- auto.arima(
   orders_ts,
-  d = 1,              # ARMA by differencing once
-  seasonal = FALSE,  # do not include seasonal terms
+  d = 1,              
+  seasonal = FALSE,  
   stepwise = FALSE,
   approximation = FALSE
 )
