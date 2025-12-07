@@ -37,7 +37,7 @@ pacf_sales <- ggPacf(sales_diff) + ggtitle("PACF - Differenced Total Sales")
 grid.arrange(acf_sales, pacf_sales, ncol=2)
 
 
-# 3. Fit ARMA(p,q) Model with auto.arima()
+# 3. Fit ARMA(p,q) Model 
 
 arma_sales <- auto.arima(
   sales_ts,
