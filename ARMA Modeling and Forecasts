@@ -1,3 +1,6 @@
+Niraj Panchalavarapu 
+This code was used to build the ARMA models for Total Sales and New Orders 
+To build the model, data from "VehicleData-1.csv" was used.
 
 # UNIVARIATE ARMA MODEL - TOTAL SALES
 
